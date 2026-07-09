@@ -1,7 +1,8 @@
 # Unreal Engine generated folders
+# NOTE: Binaries/, Intermediate/, and Saved/ are excluded because they exceed
+# GitHub's 100MB-per-file limit and are multi-GB. Build/ and DerivedDataCache/
+# are tracked below.
 Binaries/
-Build/
-DerivedDataCache/
 Intermediate/
 Saved/
 
