@@ -1,0 +1,19 @@
+# Unreal Engine generated folders
+Binaries/
+Build/
+DerivedDataCache/
+Intermediate/
+Saved/
+
+# Compiled / build artifacts
+*.tmp
+*.pdb
+*.obj
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vs/
+.vscode/
+
+# Keep source assets tracked (Config, Content, Source, .uproject)
