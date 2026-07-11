@@ -201,6 +201,8 @@ private:
 		FMLCarState State;
 		FCarProgram Program;
 		bool bUpperEntrySeenOff = false;  // cab end latched
+		FMLOrder BoundOrder;              // order consumed from the queue at eyes-break
+		bool bHasBoundOrder = false;      // returned to the queue if the "car" was a blip
 	};
 
 	struct FRollerSequence
@@ -257,6 +259,8 @@ private:
 	void FinishCarMeasurement(bool bValid);
 	void ApplyOrderToCar(FCar& Car, const FMLOrder& Order);
 	void ApplyServiceToCar(FCar& Car, const FMLServiceConfig& Service);
+	void CollectOrderServices(const TArray<int32>& ServiceNumbers, int32 Depth,
+	                          TArray<const FMLServiceConfig*>& OutServices) const;
 	void RebuildPublicCarStates();
 
 	void EvaluateRelays();

@@ -234,6 +234,31 @@ void FMicrologicSimCore::BeginCarMeasurement()
 	MeasuringCarIndex = Cars_Internal.Num() - 1;
 	LastTireSwitchLength = -1.f;
 
+	// The order binds the moment the car breaks the eyes ("Default Wash if
+	// None Programmed" fires if no order was sent PRIOR), so devices close to
+	// the entrance fire while the car is still being measured. If this turns
+	// out to be a blip shorter than Minimum Car Length, the order goes back.
+	FCar& NewCar = Cars_Internal.Last();
+	if (Queue.Num() > 0)
+	{
+		NewCar.BoundOrder = Queue[0];
+		NewCar.bHasBoundOrder = true;
+		Queue.RemoveAt(0);
+		ApplyOrderToCar(NewCar, NewCar.BoundOrder);
+		OnQueueChanged.Broadcast();
+	}
+	else if (Config.RollerDefaults.DefaultWashService != 0)
+	{
+		FMLOrder Fallback;
+		Fallback.ServiceNumbers.Add(Config.RollerDefaults.DefaultWashService);
+		ApplyOrderToCar(NewCar, Fallback);
+	}
+	else
+	{
+		// No order and no default: the car rides through with default relays only.
+		ApplyOrderToCar(NewCar, FMLOrder());
+	}
+
 	RebuildPublicCarStates();
 	OnCarEntered.Broadcast(Cars_Internal.Last().State);
 }
@@ -252,6 +277,12 @@ void FMicrologicSimCore::FinishCarMeasurement(bool bValid)
 	if (!bValid || Car.State.LengthFeet < Config.RollerDefaults.MinCarLengthFeet)
 	{
 		// Below Minimum Car Length: the photo eyes never saw a real car.
+		// An order consumed at eyes-break goes back to the head of the queue.
+		if (Car.bHasBoundOrder)
+		{
+			Queue.Insert(Car.BoundOrder, 0);
+			OnQueueChanged.Broadcast();
+		}
 		Cars_Internal.RemoveAt(MeasuringCarIndex);
 		MeasuringCarIndex = INDEX_NONE;
 		RebuildPublicCarStates();
@@ -259,30 +290,31 @@ void FMicrologicSimCore::FinishCarMeasurement(bool bValid)
 	}
 
 	MeasuringCarIndex = INDEX_NONE;
-
-	// Bind the order: pop the queue, or fall back to the Default Wash.
-	if (Queue.Num() > 0)
-	{
-		const FMLOrder Order = Queue[0];
-		Queue.RemoveAt(0);
-		ApplyOrderToCar(Car, Order);
-		OnQueueChanged.Broadcast();
-	}
-	else if (Config.RollerDefaults.DefaultWashService != 0)
-	{
-		FMLOrder Fallback;
-		Fallback.ServiceNumbers.Add(Config.RollerDefaults.DefaultWashService);
-		ApplyOrderToCar(Car, Fallback);
-	}
-	else
-	{
-		// No order and no default: the car rides through with default relays only.
-		FMLOrder Empty;
-		ApplyOrderToCar(Car, Empty);
-	}
-
 	RebuildPublicCarStates();
 	OnCarMeasured.Broadcast(Car.State);
+}
+
+void FMicrologicSimCore::CollectOrderServices(const TArray<int32>& ServiceNumbers, int32 Depth,
+                                              TArray<const FMLServiceConfig*>& OutServices) const
+{
+	if (Depth >= KMaxMacroDepth)
+	{
+		return;
+	}
+	for (const int32 ServiceNumber : ServiceNumbers)
+	{
+		if (const FMLServiceConfig* Service = FindServiceConfig(ServiceNumber))
+		{
+			if (Service->Type == EMLServiceType::Macro)
+			{
+				CollectOrderServices(Service->MacroServiceNumbers, Depth + 1, OutServices);
+			}
+			else
+			{
+				OutServices.Add(Service);
+			}
+		}
+	}
 }
 
 void FMicrologicSimCore::ApplyOrderToCar(FCar& Car, const FMLOrder& Order)
@@ -296,11 +328,30 @@ void FMicrologicSimCore::ApplyOrderToCar(FCar& Car, const FMLOrder& Order)
 		}
 	}
 
-	for (const int32 ServiceNumber : Order.ServiceNumbers)
+	// Expand macros, then apply in two phases so De-programmable removals win
+	// "no matter the wash package" — regardless of order within the order.
+	TArray<const FMLServiceConfig*> Services;
+	CollectOrderServices(Order.ServiceNumbers, 0, Services);
+
+	for (const FMLServiceConfig* Service : Services)
 	{
-		if (const FMLServiceConfig* Service = FindServiceConfig(ServiceNumber))
+		if (Service->Type != EMLServiceType::Deprogrammable)
 		{
 			ApplyServiceToCar(Car, *Service);
+		}
+	}
+	for (const FMLServiceConfig* Service : Services)
+	{
+		if (Service->Type == EMLServiceType::Deprogrammable)
+		{
+			ApplyServiceToCar(Car, *Service);
+		}
+	}
+
+	for (const int32 ServiceNumber : Order.ServiceNumbers)
+	{
+		if (FindServiceConfig(ServiceNumber))
+		{
 			Car.State.ServiceNumbers.Add(ServiceNumber);
 		}
 	}

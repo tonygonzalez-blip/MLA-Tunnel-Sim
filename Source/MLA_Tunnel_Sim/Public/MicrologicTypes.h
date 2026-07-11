@@ -176,9 +176,9 @@ struct FMLModifierConfig
 
 	/**
 	 * Distance (ft) into the function window before the modifier engages.
-	 * Bump example: 7 → device runs for 7 ft, then retracts.
-	 * FrontOfCar/RearOfCar/FrontAndRearOnly interpret this as their
-	 * front-section length; OpenPickupBed ignores it (uses cab end).
+	 * Bump/MirrorBump: the engaged stretch before the retract (Bump example: 7).
+	 * FrontAndRearOnly: the kept front-section length.
+	 * FrontOfCar/RearOfCar/OpenPickupBed ignore it.
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Micrologic")
 	float StartFeet = 0.f;
@@ -186,6 +186,9 @@ struct FMLModifierConfig
 	/**
 	 * Length (ft) of the suppressed/retracted stretch.
 	 * Bump example: 11 → retracted for 11 ft, then re-engages.
+	 * FrontOfCar: feet to wait after the front before turning on.
+	 * RearOfCar: feet suppressed at the rear of the vehicle.
+	 * FrontAndRearOnly: the kept rear-section length.
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Micrologic")
 	float LengthFeet = 0.f;
