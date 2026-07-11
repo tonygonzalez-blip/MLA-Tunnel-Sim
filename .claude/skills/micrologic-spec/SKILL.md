@@ -345,10 +345,15 @@ Behavior notes the code enforces that trip people up:
   survive config reloads.
 - Commit + Reload **keeps the queue** (`ResetRuntime` intentionally doesn't
   clear it); Restore only fills the staged config until Commit + Reload.
-- Queue Mode None replaces the pending order; a car finishing measurement pops
-  the queue head, else falls back to Default Wash, else defaults-only ride.
-- Cars shorter than Minimum Car Length are discarded at measurement end; at
-  Maximum Car Length the order completes mid-eyes.
+- Queue Mode None replaces the pending order; a car popping the eyes **binds
+  the queue-head order immediately at eyes-break** (so near-entrance devices
+  fire while measuring), else falls back to Default Wash, else a defaults-only
+  ride. De-programmable removals apply after all additive services in the
+  order, regardless of listed order (macros expanded first).
+- Cars shorter than Minimum Car Length are discarded at measurement end and
+  their consumed order returns to the queue head (unless Queue Mode None
+  already holds a replacement); at Maximum Car Length the order completes
+  mid-eyes.
 - Directly-executed car-programming services (Wash/Service/Deprogrammable/
   TurnOn/TurnOff/Override via `ExecuteService`) apply to the **newest car in
   the tunnel** and are rejected when the tunnel is empty; momentary/toggler/

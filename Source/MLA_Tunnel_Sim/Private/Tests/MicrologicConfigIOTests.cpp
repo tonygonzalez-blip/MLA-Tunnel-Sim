@@ -2,6 +2,8 @@
 //
 // Backup/Restore XML round-trip tests and factory-default config consistency.
 
+#include "CoreMinimal.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Misc/AutomationTest.h"

@@ -4,6 +4,8 @@
 // Up 4 ft, Down 4 ft, Up Again 8 ft — at 1 pulse/ft the roller relay is ON
 // for pulses [0,4), OFF for [4,8), ON for [8,16), then off.
 
+#include "CoreMinimal.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Misc/AutomationTest.h"

@@ -3,6 +3,8 @@
 // Vehicle measurement and order-queue tests: pulses, min/max car length,
 // default wash binding, queue modes, and the conveyor-interlock gate.
 
+#include "CoreMinimal.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Misc/AutomationTest.h"

@@ -430,6 +430,13 @@ struct FMLAntiCollisionSettings
 	/** Slow Down Horn: service fired when the slow-down engages (typically the horn). 0 = disabled. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Micrologic")
 	int32 SlowDownHornService = 0;
+
+	/**
+	 * Conveyor Stall: if YES the stall input is enabled — the conveyor stops
+	 * on it and will not start until it clears.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Micrologic")
+	bool bConveyorStallEnabled = true;
 };
 
 /** Settings → Roller/Defaults tab. */

@@ -228,6 +228,7 @@ private:
 
 	EMLConveyorState ConveyorState = EMLConveyorState::Stopped;
 	EMLStopReason LastStopReason = EMLStopReason::None;
+	EMLStopReason PendingStopReasonOverride = EMLStopReason::None; // reattributes shut-off-service stops
 	float ConveyorPhaseTimer = 0.f;     // horn delay / horn countdown
 	float ConveyorRunSeconds = 0.f;     // continuous run time (interlock start)
 	float ConveyorStopSeconds = 0.f;    // continuous stop time (interlock stop)
@@ -265,7 +266,7 @@ private:
 
 	void EvaluateRelays();
 	bool EvaluateRelayWindow(const FMLRelayConfig& RelayCfg, const FCar& Car) const;
-	bool IsSuppressedByModifiers(const FMLFunctionConfig& Fn, const FCar& Car, float WindowStartFront) const;
+	bool IsSuppressedByModifiers(const FMLFunctionConfig& Fn, const FCar& Car) const;
 	static float ThresholdFor(EMLTurnReference Ref, float OffsetFeet, float DevicePos);
 	float ReferencePosition(EMLTurnReference Ref, const FCar& Car) const;
 

@@ -250,6 +250,10 @@ void UMLSettingsAntiCollisionTab::RefreshFromController()
 	{
 		SpinBox_SlowDownHornService->SetValue(static_cast<float>(Settings.SlowDownHornService));
 	}
+	if (CheckBox_ConveyorStall)
+	{
+		CheckBox_ConveyorStall->SetIsChecked(Settings.bConveyorStallEnabled);
+	}
 }
 
 void UMLSettingsAntiCollisionTab::StageFromUi()
@@ -267,6 +271,10 @@ void UMLSettingsAntiCollisionTab::StageFromUi()
 	Settings.SlowDownService = SpinToInt(SpinBox_SlowDownService, Settings.SlowDownService);
 	Settings.SlowDownTimeSeconds = SpinToFloat(SpinBox_SlowDownTime, Settings.SlowDownTimeSeconds);
 	Settings.SlowDownHornService = SpinToInt(SpinBox_SlowDownHornService, Settings.SlowDownHornService);
+	if (CheckBox_ConveyorStall)
+	{
+		Settings.bConveyorStallEnabled = CheckBox_ConveyorStall->IsChecked();
+	}
 
 	Controller->SetStagedAntiCollision(Settings);
 }

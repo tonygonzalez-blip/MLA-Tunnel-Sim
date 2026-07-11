@@ -19,7 +19,7 @@
 namespace
 {
 	constexpr int32 LedGridColumns = 8;
-	constexpr float PulseLitSeconds = 0.15f;
+	constexpr float BoardPulseLitSeconds = 0.15f;
 }
 
 FString UMLHardwareBoardsScreen::GetPin() const
@@ -88,7 +88,7 @@ void UMLHardwareBoardsScreen::NativeTick(const FGeometry& MyGeometry, float InDe
 	// Pulse LED blinks: lit only within a short window after each pulse.
 	if (Border_PulseLed)
 	{
-		const bool bLit = Controller->GetTimeSinceLastPulse() < PulseLitSeconds;
+		const bool bLit = Controller->GetTimeSinceLastPulse() < BoardPulseLitSeconds;
 		Border_PulseLed->SetBrushColor(bLit ? MLUi::OnColor : MLUi::OffColor);
 	}
 

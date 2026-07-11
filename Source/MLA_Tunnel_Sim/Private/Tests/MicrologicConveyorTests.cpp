@@ -3,6 +3,8 @@
 // Conveyor state-machine tests: start/horn sequence, stop circuits, stall,
 // exit door, conveyor-type relays, and the inactivity timeout.
 
+#include "CoreMinimal.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Misc/AutomationTest.h"

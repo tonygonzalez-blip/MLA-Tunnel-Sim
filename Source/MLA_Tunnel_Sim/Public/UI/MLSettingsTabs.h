@@ -145,6 +145,9 @@ protected:
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<USpinBox> SpinBox_SlowDownHornService;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UCheckBox> CheckBox_ConveyorStall;
 };
 
 // ---------------------------------------------------------------------------

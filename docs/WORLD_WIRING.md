@@ -53,10 +53,11 @@ but start with this map so the default config drives the tunnel correctly.
 | `WelcomeArchLight_BP` / `WaitGo_BP` | 17 | Wash Confirmation Light |
 | `TireShine_BP` | 18 | Tire Shine |
 
-Unassigned default relays (11 Ceramic Sealant, 12 Graphene Coat, 13 Rinse Arch,
-14 Spot Free Rinse, 15 Buff & Dry Cloth, 20-22 retract solenoids) can be
+Unassigned relays (2 Horn, 11 Ceramic Sealant, 12 Graphene Coat, 13 Rinse
+Arch, 14 Spot Free Rinse, 15 Buff & Dry Cloth, 20-22 retract solenoids) can be
 mapped to spare sprayer/arch instances or left unwired for now — the dashboard
-still shows them firing.
+still shows them firing. Relay 2 (Horn) is worth wiring early: point it at an
+actor that plays a horn sound so the smoke test's pre-start horn is audible.
 
 ## Wiring one machine (editor steps)
 
@@ -160,10 +161,13 @@ Run this after wiring. It touches every layer.
    a 3-second horn, then the conveyor runs.
 5. Drive or spawn a car through the entry eyes. Watch the dashboard measure it,
    then watch the relays fire down the tunnel in position order: Wetdown (3),
-   Presoak (4), CTA (5), Wraps (6), Top Brush (7), High Pressure (8), Triple
-   Foam (9) and Tire Brushes (10) — those two fire because Better Wash adds
-   them — then rinses, Buff & Dry, Blowers (16). The machines in the world
-   should run in the same order.
+   Presoak (4), CTA (5, at 15 ft), Tire Brushes (10, at 20 ft — fires here
+   because Better Wash adds it), Wraps (6), Top Brush (7), High Pressure (8),
+   Triple Foam (9, also a Better Wash add-on), then rinses, Buff & Dry,
+   Blowers (16). The machines in the world should run in the same order —
+   note Tire Brushes energizing right after the CTA is correct, not a wiring
+   error, because its device position (20 ft) sits between the CTA and the
+   Wraps.
 6. Flip **relay 7's** manual board switch to **ON** (Relays board in the UI).
    The top brush now runs constantly, regardless of any car. Flip it back to
    **AUTO** and it returns to normal.

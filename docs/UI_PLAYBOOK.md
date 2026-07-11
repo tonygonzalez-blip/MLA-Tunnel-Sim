@@ -256,6 +256,7 @@ reload from the staged config on `OnConfigChanged`.
 | `SpinBox_SlowDownService` | SpinBox | Slow-down service |
 | `SpinBox_SlowDownTime` | SpinBox | Seconds before stop (0 = immediate) |
 | `SpinBox_SlowDownHornService` | SpinBox | Horn service during slow-down |
+| `CheckBox_ConveyorStall` | CheckBox | Conveyor Stall input enabled (YES = stall stops the conveyor and blocks starts) |
 | `Button_Save` | Button | Stage + Commit |
 
 ## UMLSettingsRollerDefaultsTab
@@ -342,7 +343,7 @@ Class default: `RelaySwitchRowClass` = your `WBP_MLRelaySwitchRow`.
 
 | Binding | Type | Purpose |
 |---|---|---|
-| `TextBlock_Relay` | TextBlock | `3 — Top Brush` |
+| `TextBlock_Relay` | TextBlock | `7 — Top Brush` |
 | `Button_Auto` / `Button_On` / `Button_Off` | Button | 3-position manual switch (active position disabled) |
 | `Border_Led` | Border | Physical relay state |
 

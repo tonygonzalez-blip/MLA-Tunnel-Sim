@@ -5,6 +5,8 @@
 // position 100 ft; A/C input on channel 7; slow-down time 3 s; After
 // Anti-Collision Clears Activate Button = the conveyor-start service.
 
+#include "CoreMinimal.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Misc/AutomationTest.h"

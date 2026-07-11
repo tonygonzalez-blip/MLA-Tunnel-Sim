@@ -5,6 +5,8 @@
 // car's front bumper to exact integer feet and checking either side of each
 // boundary pulse.
 
+#include "CoreMinimal.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Misc/AutomationTest.h"

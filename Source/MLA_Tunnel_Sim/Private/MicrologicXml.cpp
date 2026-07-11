@@ -92,9 +92,9 @@ FString MicrologicXml::ConfigToXml(const FMLControllerConfig& Config)
 
 	const FMLAntiCollisionSettings& AC = Config.AntiCollision;
 	Xml += FString::Printf(
-		TEXT("\t<AntiCollision RelayNumber=\"%d\" AfterClearsActivateService=\"%d\" SlowDownService=\"%d\" SlowDownTimeSeconds=\"%f\" SlowDownHornService=\"%d\"/>\n"),
+		TEXT("\t<AntiCollision RelayNumber=\"%d\" AfterClearsActivateService=\"%d\" SlowDownService=\"%d\" SlowDownTimeSeconds=\"%f\" SlowDownHornService=\"%d\" ConveyorStallEnabled=\"%s\"/>\n"),
 		AC.RelayNumber, AC.AfterClearsActivateService, AC.SlowDownService,
-		AC.SlowDownTimeSeconds, AC.SlowDownHornService);
+		AC.SlowDownTimeSeconds, AC.SlowDownHornService, *BoolStr(AC.bConveyorStallEnabled));
 
 	const FMLRollerDefaults& Roller = Config.RollerDefaults;
 	Xml += FString::Printf(
@@ -213,6 +213,7 @@ bool MicrologicXml::ConfigFromXml(const FString& Xml, FMLControllerConfig& OutCo
 		AC.SlowDownService = AttrInt(Node, TEXT("SlowDownService"));
 		AC.SlowDownTimeSeconds = AttrFloat(Node, TEXT("SlowDownTimeSeconds"));
 		AC.SlowDownHornService = AttrInt(Node, TEXT("SlowDownHornService"));
+		AC.bConveyorStallEnabled = AttrBool(Node, TEXT("ConveyorStallEnabled"), true);
 	}
 
 	if (const FXmlNode* Node = Root->FindChildNode(TEXT("RollerDefaults")))

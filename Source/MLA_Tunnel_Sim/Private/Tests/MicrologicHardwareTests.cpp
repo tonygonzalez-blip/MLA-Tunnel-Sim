@@ -3,6 +3,8 @@
 // Hardware-layer tests: relay board manual switches (ON/OFF/AUTO), input
 // inversion, debounce, trigger inputs, and what survives a Commit + Reload.
 
+#include "CoreMinimal.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Misc/AutomationTest.h"

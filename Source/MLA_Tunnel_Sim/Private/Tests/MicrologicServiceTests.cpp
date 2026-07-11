@@ -4,6 +4,8 @@
 // Override, Momentarily On/Off, Toggler, Macro, Command, and rejection of
 // undefined services.
 
+#include "CoreMinimal.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Misc/AutomationTest.h"

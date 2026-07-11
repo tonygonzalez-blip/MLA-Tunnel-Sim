@@ -13,6 +13,8 @@
 
 #pragma once
 
+#include "CoreMinimal.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "CoreMinimal.h"

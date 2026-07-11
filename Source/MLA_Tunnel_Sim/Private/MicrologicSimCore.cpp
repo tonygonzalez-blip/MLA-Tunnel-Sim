@@ -40,8 +40,31 @@ void FMicrologicSimCore::SetConfig(const FMLControllerConfig& InConfig, bool bRe
 {
 	Config = InConfig;
 
+	// A Maximum Car Length below the Minimum would classify every completed
+	// measurement as a blip; keep the pair sane.
+	Config.RollerDefaults.MaxCarLengthFeet = FMath::Max(
+		Config.RollerDefaults.MaxCarLengthFeet, Config.RollerDefaults.MinCarLengthFeet);
+
 	const int32 NumInputs = FMath::Max(1, Config.Communications.NumInputBoards) * 16;
 	const int32 NumRelays = FMath::Max(1, Config.Communications.NumRelayBoards) * 8;
+
+	// Boards being removed must drop their outputs audibly: broadcast OFF for
+	// anything energized on a relay (or committed on an input) that is about
+	// to disappear, so bound world devices don't stay powered forever.
+	for (int32 RelayNumber = NumRelays + 1; RelayNumber <= Relays.Num(); ++RelayNumber)
+	{
+		if (Relays[RelayNumber - 1].bPhysicalOn)
+		{
+			OnRelayChanged.Broadcast(RelayNumber, false);
+		}
+	}
+	for (int32 Channel = NumInputs + 1; Channel <= Inputs.Num(); ++Channel)
+	{
+		if (Inputs[Channel - 1].bCommitted)
+		{
+			OnInputChanged.Broadcast(Channel, false);
+		}
+	}
 
 	// Preserve raw wire states and manual switch positions across config swaps —
 	// rewiring a controller does not move the physical switches.
@@ -59,6 +82,9 @@ void FMicrologicSimCore::SetConfig(const FMLControllerConfig& InConfig, bool bRe
 		{
 			SetInputRaw(Channel, Inputs[Channel - 1].bRaw);
 		}
+		// The auto interlock wire follows the (possibly re-wired) Conveyor
+		// channel of the NEW config.
+		SyncConveyorInterlockWire();
 		EvaluateRelays();
 	}
 }
@@ -138,7 +164,9 @@ void FMicrologicSimCore::Advance(float DeltaSeconds)
 	{
 		PulseAccumulatorFeet += (Config.Conveyor.InchesPerSecond / 12.f) * DeltaSeconds;
 		const float Interval = PulseFeetInterval();
-		while (PulseAccumulatorFeet >= Interval)
+		// Re-check the conveyor every pulse: a pulse side effect (stall input,
+		// anti-collision trip) can stop it mid-frame.
+		while (PulseAccumulatorFeet >= Interval && IsConveyorRunning())
 		{
 			PulseAccumulatorFeet -= Interval;
 			EmitPulse();
@@ -277,8 +305,10 @@ void FMicrologicSimCore::FinishCarMeasurement(bool bValid)
 	if (!bValid || Car.State.LengthFeet < Config.RollerDefaults.MinCarLengthFeet)
 	{
 		// Below Minimum Car Length: the photo eyes never saw a real car.
-		// An order consumed at eyes-break goes back to the head of the queue.
-		if (Car.bHasBoundOrder)
+		// An order consumed at eyes-break goes back to the head of the queue —
+		// unless Queue Mode None already holds a newer order that replaced it.
+		if (Car.bHasBoundOrder &&
+			(Config.RollerDefaults.QueueMode != EMLQueueMode::None || Queue.Num() == 0))
 		{
 			Queue.Insert(Car.BoundOrder, 0);
 			OnQueueChanged.Broadcast();
@@ -467,6 +497,13 @@ void FMicrologicSimCore::SetInputRaw(int32 Channel, bool bState)
 		return;
 	}
 
+	if (Input.PendingTimer >= 0.f && Input.bPendingState == bEffective)
+	{
+		// Same change already counting down; re-asserting the raw state every
+		// tick must not restart the debounce window.
+		return;
+	}
+
 	const float Debounce = Cfg ? EffectiveDebounce(*Cfg) : Config.RollerDefaults.DefaultInputDebounceSeconds;
 	if (Debounce <= 0.f)
 	{
@@ -576,15 +613,28 @@ void FMicrologicSimCore::OnInputCommitted(int32 Channel, bool bNewState)
 		break;
 
 	case EMLInputType::Stall:
-		if (bNewState)
+		if (bNewState && Config.AntiCollision.bConveyorStallEnabled)
 		{
 			RequestConveyorStop(EMLStopReason::Stall);
 		}
 		break;
 
+	case EMLInputType::Conveyor:
+		// The interlock committing late (debounce) must not strand a car that
+		// is already holding the entry eyes.
+		if (bNewState && IsConveyorRunning() &&
+			MeasuringCarIndex == INDEX_NONE && HasCommittedInput(EMLInputType::Entry))
+		{
+			BeginCarMeasurement();
+		}
+		break;
+
 	case EMLInputType::ExitDoor:
+		// The door dropping must also abort a start sequence in progress
+		// (HornDelay/Horn), not just a running conveyor.
 		if (!bNewState && Config.Communications.bExitDoorEnabled &&
-			Config.Conveyor.ShutOffService != 0 && IsConveyorRunning())
+			Config.Conveyor.ShutOffService != 0 &&
+			ConveyorState != EMLConveyorState::Stopped)
 		{
 			RequestConveyorStop(EMLStopReason::ExitDoor);
 		}
@@ -598,7 +648,6 @@ void FMicrologicSimCore::OnInputCommitted(int32 Channel, bool bNewState)
 		break;
 
 	case EMLInputType::AntiCollision:
-	case EMLInputType::Conveyor:
 	case EMLInputType::None:
 	default:
 		break; // handled by polling logic / informational
@@ -728,7 +777,13 @@ bool FMicrologicSimCore::ExecuteService(int32 ServiceNumber)
 			Action.bTurnOn = (Service->Type == EMLServiceType::MomentarilyOn);
 			Action.DelayRemaining = FMath::Max(0.f, Service->DelaySeconds);
 			Action.DurationRemaining = FMath::Max(0.f, Service->TimeSeconds);
-			Momentaries.Add(Action);
+			// No delay: the pulse begins the moment the service executes, so
+			// the EvaluateRelays at the end of this call already sees it.
+			Action.bStarted = (Action.DelayRemaining <= 0.f);
+			if (Action.DurationRemaining > 0.f)
+			{
+				Momentaries.Add(Action);
+			}
 		}
 		break;
 
@@ -859,6 +914,9 @@ bool FMicrologicSimCore::RequestRoller()
 	RollerSequence.bActive = true;
 	RollerSequence.Phase = 0;
 	RollerSequence.DistanceRemaining = FMath::Max(0.f, Config.RollerDefaults.UpFeet);
+	// Zero-length phases resolve immediately rather than latching until the
+	// next pulse.
+	UpdateRollerSequenceOnPulse(0.f);
 	EvaluateRelays();
 	return true;
 }
@@ -920,7 +978,7 @@ void FMicrologicSimCore::RequestConveyorStart()
 			return;
 		}
 	}
-	if (HasCommittedInput(EMLInputType::Stall))
+	if (Config.AntiCollision.bConveyorStallEnabled && HasCommittedInput(EMLInputType::Stall))
 	{
 		return;
 	}
@@ -962,6 +1020,10 @@ void FMicrologicSimCore::RequestConveyorStop(EMLStopReason Reason)
 	{
 		return;
 	}
+	if (Reason == EMLStopReason::Manual && PendingStopReasonOverride != EMLStopReason::None)
+	{
+		Reason = PendingStopReasonOverride;
+	}
 	LastStopReason = Reason;
 	if (Reason == EMLStopReason::AntiCollision)
 	{
@@ -993,7 +1055,13 @@ void FMicrologicSimCore::SetConveyorState(EMLConveyorState NewState)
 		BeginCarMeasurement();
 	}
 
-	OnConveyorStateChanged.Broadcast(NewState);
+	// The side effects above can re-enter SetConveyorState (e.g. an order
+	// carrying the shut-off service). The nested call already broadcast the
+	// newer state; don't follow it with a stale one.
+	if (ConveyorState == NewState)
+	{
+		OnConveyorStateChanged.Broadcast(NewState);
+	}
 }
 
 void FMicrologicSimCore::UpdateConveyor(float Dt)
@@ -1187,13 +1255,11 @@ void FMicrologicSimCore::UpdateInactivity(float Dt)
 	}
 
 	InactivitySeconds = 0.f;
+	// ExecuteService stops via the Shut Off button designation; the override
+	// makes both the event and the polled reason say Inactivity.
+	PendingStopReasonOverride = EMLStopReason::Inactivity;
 	ExecuteService(Config.Conveyor.ShutOffService);
-	// ExecuteService handles the stop via the Shut Off button designation; make
-	// sure the stop reason reflects inactivity for the dashboard.
-	if (ConveyorState == EMLConveyorState::Stopped)
-	{
-		LastStopReason = EMLStopReason::Inactivity;
-	}
+	PendingStopReasonOverride = EMLStopReason::None;
 }
 
 // ---------------------------------------------------------------------------
@@ -1205,20 +1271,29 @@ void FMicrologicSimCore::UpdateMomentaries(float Dt)
 	for (int32 Index = Momentaries.Num() - 1; Index >= 0; --Index)
 	{
 		FMomentaryAction& Action = Momentaries[Index];
+		float Remaining = Dt;
+
 		if (!Action.bStarted)
 		{
-			Action.DelayRemaining -= Dt;
-			if (Action.DelayRemaining <= 0.f)
+			if (Action.DelayRemaining > Remaining)
 			{
-				Action.bStarted = true;
+				Action.DelayRemaining -= Remaining;
+				continue;
 			}
-			else
+			// The delay expires inside this frame: start, and only charge the
+			// duration for the leftover part of the frame. Guarantee at least
+			// one evaluation with the relay pulsed even under coarse steps.
+			Remaining -= Action.DelayRemaining;
+			Action.DelayRemaining = 0.f;
+			Action.bStarted = true;
+			if (Remaining >= Action.DurationRemaining)
 			{
+				Action.DurationRemaining = 0.001f;
 				continue;
 			}
 		}
 
-		Action.DurationRemaining -= Dt;
+		Action.DurationRemaining -= Remaining;
 		if (Action.DurationRemaining <= 0.f)
 		{
 			Momentaries.RemoveAt(Index);
@@ -1340,16 +1415,18 @@ bool FMicrologicSimCore::EvaluateRelayWindow(const FMLRelayConfig& RelayCfg, con
 		return false;
 	}
 
-	return !IsSuppressedByModifiers(Fn, Car, OnThreshold);
+	return !IsSuppressedByModifiers(Fn, Car);
 }
 
-bool FMicrologicSimCore::IsSuppressedByModifiers(const FMLFunctionConfig& Fn, const FCar& Car, float WindowStartFront) const
+bool FMicrologicSimCore::IsSuppressedByModifiers(const FMLFunctionConfig& Fn, const FCar& Car) const
 {
 	const float D = Fn.DevicePositionFeet;
 	const float Front = Car.State.FrontPositionFeet;
 	const float Rear = Car.State.RearPositionFeet();
-	// Distance traveled since the window opened (vehicle-relative progress).
-	const float S = Front - WindowStartFront;
+	// The cheat sheet anchors every distance-based modifier to the FRONT OF
+	// THE VEHICLE passing the device ("retract 2' 6\" after the front of the
+	// vehicle"), independent of the function's turn-on offset.
+	const float S = Front - D;
 
 	for (const FMLModifierConfig& Mod : Fn.Modifiers)
 	{
@@ -1437,8 +1514,10 @@ void FMicrologicSimCore::EvaluateRelays()
 			default:
 				if (Cfg->Function.Type == EMLFunctionType::Light)
 				{
-					// Light functions mirror the roller function (wash lights).
-					bWindow = bRollerUp;
+					// Light functions run for the duration of the roller
+					// function (wash confirmation lights) — the whole
+					// sequence, including the held-down stretch.
+					bWindow = RollerSequence.bActive;
 				}
 				else
 				{
@@ -1498,17 +1577,20 @@ void FMicrologicSimCore::EvaluateRelays()
 				break;
 			}
 
+			// Interlocks apply to any relay type except Horn (the horn must
+			// sound BEFORE the conveyor runs by definition).
 			// Interlock Start: conveyor must run this long before the function may engage.
 			if (bWindow && Cfg->InterlockStartSeconds > 0.f &&
-				Cfg->Type == EMLRelayType::Normal &&
+				Cfg->Type != EMLRelayType::Horn &&
 				ConveyorRunSeconds < Cfg->InterlockStartSeconds)
 			{
 				bWindow = false;
 			}
 
-			// Interlock Stop: once the conveyor has been off this long, the function turns off.
+			// Interlock Stop: once the conveyor has been off this long, the
+			// function turns off (0 = disabled: the window holds while stopped).
 			if (bWindow && Cfg->InterlockStopSeconds > 0.f &&
-				Cfg->Type == EMLRelayType::Normal &&
+				Cfg->Type != EMLRelayType::Horn &&
 				!IsConveyorRunning() && ConveyorStopSeconds >= Cfg->InterlockStopSeconds)
 			{
 				bWindow = false;
@@ -1517,17 +1599,19 @@ void FMicrologicSimCore::EvaluateRelays()
 
 		Runtime.bWindowActive = bWindow;
 
-		// Compose logical state: window OR toggled OR momentary-on, minus momentary-off.
-		bool bLogical = bWindow || ToggledRelays.Contains(RelayNumber);
+		// Compose logical state: window OR toggled OR momentary-on, minus
+		// momentary-off. A forced-off always beats a simultaneous forced-on.
+		bool bMomentaryOn = false;
+		bool bMomentaryOff = false;
 		for (const FMomentaryAction& Action : Momentaries)
 		{
 			if (Action.RelayNumber == RelayNumber && Action.bStarted)
 			{
-				bLogical = Action.bTurnOn ? true : false;
+				(Action.bTurnOn ? bMomentaryOn : bMomentaryOff) = true;
 			}
 		}
-
-		Runtime.bLogicalOn = bLogical;
+		Runtime.bLogicalOn =
+			(bWindow || ToggledRelays.Contains(RelayNumber) || bMomentaryOn) && !bMomentaryOff;
 	}
 
 	ApplyPhysicalRelayStates();

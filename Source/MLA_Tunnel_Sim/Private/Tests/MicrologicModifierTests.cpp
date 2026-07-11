@@ -5,6 +5,8 @@
 // the unmodified window is front in [20, 20 + car length). "S" below is feet
 // of travel since the window opened (= front - 20).
 
+#include "CoreMinimal.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Misc/AutomationTest.h"
